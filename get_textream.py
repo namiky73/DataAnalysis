@@ -6,10 +6,8 @@ import sqlite3
 import sys
 from stem import Signal
 from stem.control import Controller
-# from urllib.request import FancyURLopener
-# from datetime import datetime
-# import time
-# import random
+import datetime
+
 
 
 
@@ -22,17 +20,22 @@ class Tor:
 
 
 class PostItem:
-    def __init__(self,user,user_url,comment,year,date_mmdd,time24,positive,negative):
+    def __init__(self,user,user_url,comment,year,date_mmdd,time24,positive,negative,comment_num):
         self.user = user
         self.user_url = user_url
         self.comment = comment
-        self.year = year
-        self.date_mmdd = date_mmdd
-        self.time24 = time24
+        self.year = year # int
+        self.date_mmdd = date_mmdd # string
+        self.time24 = time24 # string
         self.positive = positive
         self.negative = negative
+        # この3つでunique
+        self.thread_num = 0
+        self.comment_num = comment_num
+        self.company_name = ""
 
     def check(self):
+        print(self.comment_num)
         print(self.user,"[",self.user_url,"]")
         print(str(self.year)+self.date_mmdd,self.time24)
         print(self.comment)
@@ -44,11 +47,11 @@ def get_thread_info(url):
     html = urllib.request.urlopen(url).read()
     soup = BeautifulSoup(html,'lxml')
 
-    thread_count = soup.find("h1").find("a").get("href").rsplit("/",1)[1].replace(",","")
+    thread_num = soup.find("h1").find("a").get("href").rsplit("/",1)[1].replace(",","")
     comment_count = soup.find(class_="threadLength").string.replace(",","")
+    latest_comment_num = soup.find(class_="comNum").getText().replace("（最新）","")
     span = soup.find("h1").getText().rsplit(" ",1)[1]
 
-    # span = span.rstrip("〜")
     spans = span.split("〜")
     span_start = spans[0]
     if len(spans) == 2:
@@ -59,8 +62,9 @@ def get_thread_info(url):
     else:
         span_end = "one day"
 
-    thread_info["thread_count"] = int(thread_count)
+    thread_info["thread_num"] = int(thread_num)
     thread_info["comment_count"] = int(comment_count)
+    thread_info["latest_comment_num"] = int(latest_comment_num)
     thread_info["span_start"] = span_start.replace("/","")
     # span_endは、日付・"now(継続中)"・"one day（1日未満のスレッド）"のいずれか
     thread_info["span_end"] = span_end.replace("/","")
@@ -71,9 +75,15 @@ def scrape_page(url):
     post_item_list = []
     html = urllib.request.urlopen(url).read()
     soup = BeautifulSoup(html,'lxml')
+    last_comment_num = 1
     comment_divs = soup.find_all("div",class_="comment")
 
     for comment_div in comment_divs:
+        if "invisibleComment" in comment_div.get("class"):
+            continue
+        comment_num = comment_div.find(class_="comNum").getText().replace("（最新）","").replace(" ","").replace("\n","")
+        print(comment_num)
+        last_comment_num = comment_num
         user_p = comment_div.find("p",class_="comWriter")
         user_a = user_p.find("a")
         if user_a:
@@ -87,6 +97,15 @@ def scrape_page(url):
         date_time = user_p.find("span",class_=None).getText().split(" ")
         date = date_time[0]
         time24 = date_time[1].replace(":","")
+        # 今年の投稿には年は書かれていない
+        if "年" in date:
+            year_date = date.split("年")
+            year = year_date[0]
+            date = year_date[1]
+        else:
+            todaydetail = datetime.datetime.today()
+            year = int(todaydetail.year)
+
         month_day = date.split("月",1)
         month = month_day[0]
         day = month_day[1].rstrip("日")
@@ -101,24 +120,28 @@ def scrape_page(url):
 
         positive = comment_div.find("li",class_="positive").find("span").getText()
         negative = comment_div.find("li",class_="negative").find("span").getText()
+        positive = int(positive)
+        negative = int(negative)
         # print(positive,negative)
 
-        item = PostItem(user,user_url,comment,2016,month+day,time24,positive,negative)
+        item = PostItem(user,user_url,comment,year,month+day,time24,positive,negative,int(comment_num))
         post_item_list.append(item)
 
-    return post_item_list
+    return {"post_item_list":post_item_list, "last_comment_num":int(last_comment_num)}
 
 
 
 if __name__ == '__main__':
 
-
-    if len(sys.argv) < 2:
-        print("[error] input a textream url")
+    if len(sys.argv) < 5:
+        print("error: input [company_name] [textream_url] [thread_start] [thread_end]")
         quit()
 
     # input_url = "http://textream.yahoo.co.jp/message/1002315/2315/"
-    input_url = sys.argv[1]
+    company_name = sys.argv[1]
+    input_url = sys.argv[2]
+    thread_start = int(sys.argv[3])
+    thread_end = int(sys.argv[4])
 
     count = 1
     with Controller.from_port(port = 9051) as controller:
@@ -126,13 +149,17 @@ if __name__ == '__main__':
         controller.authenticate()
         controller.signal(Signal.NEWNYM)
 
-        thread_count = get_thread_info(input_url)
-        print(thread_count)
-
-        post_item_list = scrape_page(input_url)
-        for item in post_item_list:
-            print("-------------")
-            item.check()
+        # thread_info = get_thread_info(input_url)
+        # print(thread_info)
+        for thread_num in range(thread_start,thread_end):
+            last_comment_num = 999999
+            while last_comment_num != 1:
+                scrape_result = scrape_page(input_url + str(thread_num) + "?offset=" + str(last_comment_num))
+                post_item_list = scrape_result["post_item_list"]
+                last_comment_num = scrape_result["last_comment_num"]
+                # for item in post_item_list:
+                #     print("-------------")
+                #     item.check()
 
         # for row in rows:
         #     if count%10 == 0:
