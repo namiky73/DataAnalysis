@@ -9,8 +9,6 @@ from stem.control import Controller
 import datetime
 
 
-
-
 class Tor:
     def __init__(self):
         socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, '127.0.0.1', 9050)
@@ -20,10 +18,10 @@ class Tor:
 
 
 class PostItem:
-    def __init__(self,user,user_url,comment,year,date_mmdd,time24,positive,negative,comment_num):
+    def __init__(self,user,user_url,content,year,date_mmdd,time24,positive,negative,comment_num):
         self.user = user
         self.user_url = user_url
-        self.comment = comment
+        self.content = content
         self.year = year # int
         self.date_mmdd = date_mmdd # string
         self.time24 = time24 # string
@@ -115,7 +113,7 @@ def scrape_page(url):
             day = "0" + day
         # print(month+day,time24)
 
-        comment = comment_div.find("p",class_="comText").getText()
+        content = comment_div.find("p",class_="comText").getText()
         # print(comment)
 
         positive = comment_div.find("li",class_="positive").find("span").getText()
@@ -124,7 +122,7 @@ def scrape_page(url):
         negative = int(negative)
         # print(positive,negative)
 
-        item = PostItem(user,user_url,comment,year,month+day,time24,positive,negative,int(comment_num))
+        item = PostItem(user,user_url,content,year,month+day,time24,positive,negative,int(comment_num))
         post_item_list.append(item)
 
     return {"post_item_list":post_item_list, "last_comment_num":int(last_comment_num)}
@@ -143,31 +141,42 @@ if __name__ == '__main__':
     thread_start = int(sys.argv[3])
     thread_end = int(sys.argv[4])
 
+    con = sqlite3.connect("./data_db/textream.sqlite3",timeout=30.0)
+
     count = 1
     with Controller.from_port(port = 9051) as controller:
         Tor = Tor()
         controller.authenticate()
         controller.signal(Signal.NEWNYM)
 
-        # thread_info = get_thread_info(input_url)
-        # print(thread_info)
-        for thread_num in range(thread_start,thread_end):
+        for thread_num in range(thread_start,thread_end+1):
+            # thread_info = get_thread_info(input_url)
+            # print(thread_info)
             last_comment_num = 999999
             while last_comment_num != 1:
+                count += 1
+                print("---------")
+                print("thread",thread_num)
+                print("comment",last_comment_num)
                 scrape_result = scrape_page(input_url + str(thread_num) + "?offset=" + str(last_comment_num))
                 post_item_list = scrape_result["post_item_list"]
                 last_comment_num = scrape_result["last_comment_num"]
-                # for item in post_item_list:
-                #     print("-------------")
-                #     item.check()
+                for item in post_item_list:
+                    con.execute('''
+                        insert or replace into comments (
+                        user, user_url, content, year,
+                        date, time, positive, negative,
+                        thread_number, comment_number, company)
+                        values(?,?,?,?,?,?,?,?,?,?,?)
+                        ''',
+                        (item.user,item.user_url,item.content,item.year,
+                        item.date_mmdd,item.time24,item.positive,item.negative,
+                        thread_num,item.comment_num,company_name)
+                    )
+                    if count%20 == 0:
+                        controller.authenticate()
+                        controller.signal(Signal.NEWNYM)
+                        con.commit()
 
-        # for row in rows:
-        #     if count%10 == 0:
-        #         controller.authenticate()
-        #         controller.signal(Signal.NEWNYM)
-        #     time.sleep(random.uniform(0.5,1.0))
-        #     req = urllib.request.Request(
-        #         row[1], # URL
-        #         data=None,
-        #         headers={"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5)AppleWebKit 537.36 (KHTML, like Gecko) Chrome"}
-        #     )
+    con.commit()
+    con.close()
