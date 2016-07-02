@@ -173,6 +173,7 @@ if __name__ == '__main__':
                         item.date_mmdd,item.time24,item.positive,item.negative,
                         thread_num,item.comment_num,company_name)
                     )
+                    print(item.time24)
                     if count%20 == 0:
                         controller.authenticate()
                         controller.signal(Signal.NEWNYM)
