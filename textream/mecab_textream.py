@@ -4,6 +4,7 @@ import TermExtract.MeCab
 import TermExtract.Core
 import sqlite3
 
+# MeCabの実行とその結果のパース
 # 参考: http://qiita.com/Salinger/items/529a77f2ceeb39998665
 def mecab_parse(text):
     tagger = MeCab.Tagger("-Ochasen")
@@ -70,6 +71,7 @@ if __name__ == '__main__':
     for k, v in sorted(words.items(), key=lambda x:x[1]):
         print(k, v)
 
+    # 複合語の語間に空白文字があることに注意
     cmp_nouns = term_extract(all_sentence)
     for k, v in sorted(cmp_nouns.items(), key=lambda x:x[1]):
         print(k, v)
