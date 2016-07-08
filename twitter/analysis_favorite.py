@@ -9,10 +9,7 @@ import sqlite3
 def mecab_parse(text):
     tagger = MeCab.Tagger("-Ochasen")
     node = tagger.parseToNode(text)
-    words = {}
-    nouns = {}
-    verbs = {}
-    adjs = {}
+    words, nouns, verbs, adjs = {}, {}, {}, {}
     while node:
         pos = node.feature.split(",")[0]
         word = node.surface
@@ -31,14 +28,11 @@ def mecab_parse(text):
                 adjs[word] = adjs[word] + 1
             else:
                 adjs[word] = 1
-
         if word in words:
             words[word] = words[word] + 1
         else:
             words[word] = 1
-
         node = node.next
-
     parsed_words_dict = {
         "all": words,
         "nouns": nouns,
@@ -59,19 +53,20 @@ def term_extract(text):
 
 
 if __name__ == '__main__':
-    con = sqlite3.connect("./sqlite_db/textream.sqlite3",timeout=30.0)
-    rows = con.execute('select content from comments')
+    con = sqlite3.connect("./data/tweet.sqlite3",timeout=30.0)
+    rows = con.execute('select tweet_text from favorites')
 
     all_sentence = ""
     for row in rows:
         all_sentence += row[0]
 
-    parsed_words_dict = mecab_parse(all_sentence)
-    words = parsed_words_dict["all"]
-    for k, v in sorted(words.items(), key=lambda x:x[1]):
-        print(k, v)
+    # parsed_words_dict = mecab_parse(all_sentence)
+    # words = parsed_words_dict["all"]
+    # for k, v in sorted(words.items(), key=lambda x:x[1]):
+    #     print(k, v)
 
     # 複合語の語間に空白文字があることに注意
     cmp_nouns = term_extract(all_sentence)
     for k, v in sorted(cmp_nouns.items(), key=lambda x:x[1]):
-        print(k, v)
+        if ('http' in k) or ('co' == k): continue
+        print(k.replace(" ",""), v)

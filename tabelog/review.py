@@ -47,10 +47,10 @@ def mecab_parse(text):
     }
     return parsed_words_dict
 
-
 def term_extract(text):
     tagger = MeCab.Tagger('')
     mecab_result = tagger.parse(all_sentence)
+    # print(mecab_result)
 
     # 参考: http://gensen.dl.itc.u-tokyo.ac.jp/pytermextract/mecab.html
     cmp_nouns = TermExtract.MeCab.cmp_noun_dict(mecab_result)
@@ -59,19 +59,25 @@ def term_extract(text):
 
 
 if __name__ == '__main__':
-    con = sqlite3.connect("./sqlite_db/textream.sqlite3",timeout=30.0)
-    rows = con.execute('select content from comments')
+
+
+    con = sqlite3.connect("./data/todai_review.sqlite3",timeout=30.0)
+    rows = con.execute('select content from reviews limit ' + sys.argv[1])
 
     all_sentence = ""
+    text = ""
     for row in rows:
-        all_sentence += row[0]
+        if row[0]: all_sentence += row[0]
+        text = row[0]
 
     parsed_words_dict = mecab_parse(all_sentence)
     words = parsed_words_dict["all"]
     for k, v in sorted(words.items(), key=lambda x:x[1]):
-        print(k, v)
+        # print(k, v)
+        pass
 
     # 複合語の語間に空白文字があることに注意
     cmp_nouns = term_extract(all_sentence)
     for k, v in sorted(cmp_nouns.items(), key=lambda x:x[1]):
-        print(k, v)
+        # print(k, v)
+        pass
